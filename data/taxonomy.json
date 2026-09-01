@@ -1,0 +1,129 @@
+{
+  "_comment": "Keyword taxonomy used by app/tagging.py. Matching is case-insensitive on caption + audio name, with word boundaries. Add your own terms freely — the analytics tab measures the lift of every tag it finds, so a new tag becomes a measurable hypothesis.",
+  "tags": {
+    "format:dj_cam": {
+      "kind": "format",
+      "keywords": ["dj set", "djset", "dj cam", "b2b", "back to back", "closing set", "opening set", "warm up set", "warmup", "live set", "boiler room", "hor berlin", "cercle"]
+    },
+    "format:studio_session": {
+      "kind": "format",
+      "keywords": ["studio", "in the studio", "jam", "live jam", "hardware jam", "dawless", "session", "making of", "wip", "work in progress"]
+    },
+    "format:tutorial": {
+      "kind": "format",
+      "keywords": ["how to", "how i", "tutorial", "trick", "tip", "technique", "step by step", "learn", "explained", "breakdown", "cheat code", "secret"]
+    },
+    "format:gear": {
+      "kind": "format",
+      "keywords": ["digitakt", "digitone", "octatrack", "elektron", "mpc", "sp404", "sp-404", "tr8", "tr-8", "roland", "moog", "prophet", "juno", "modular", "eurorack", "hardware", "synth", "drum machine", "mixer", "playdate", "op-1", "op1", "polyend", "korg"]
+    },
+    "format:plugin_daw": {
+      "kind": "format",
+      "keywords": ["ableton", "fl studio", "logic pro", "bitwig", "cubase", "plugin", "vst", "serum", "diva", "valhalla", "soundtoys", "arturia", "stock plugin", "preset"]
+    },
+    "format:before_after": {
+      "kind": "format",
+      "keywords": ["before and after", "before after", "with vs without", "vs without", "boring vs", "flat vs", "raw vs", "unmixed", "mixed vs"]
+    },
+    "format:visualizer": {
+      "kind": "format",
+      "keywords": ["visualizer", "loop video", "audio reactive", "waveform", "oscilloscope", "3d render", "blender", "touchdesigner", "generative"]
+    },
+    "format:crowd_cam": {
+      "kind": "format",
+      "keywords": ["crowd", "dancefloor", "dance floor", "reaction", "hands up", "warehouse", "rave", "afters", "after hours", "closing", "sunrise", "open air", "terrace"]
+    },
+    "format:talking_head": {
+      "kind": "format",
+      "keywords": ["storytime", "story time", "my take", "unpopular opinion", "hot take", "let me explain", "here's why", "heres why", "rant"]
+    },
+    "format:meme": {
+      "kind": "format",
+      "keywords": ["meme", "when the", "nobody:", "me when", "pov", "point of view", "that one guy", "every dj", "producers be like"]
+    },
+    "format:track_id": {
+      "kind": "format",
+      "keywords": ["track id", "trackid", "id?", "what's this track", "whats this track", "unreleased", "forthcoming", "out now", "new track", "premiere", "vinyl only"]
+    },
+    "hook:wait_for_it": {
+      "kind": "hook",
+      "keywords": ["wait for it", "wait for the drop", "wait till", "wait until", "keep watching", "watch till the end", "till the end", "at 0:", "last 10 seconds"]
+    },
+    "hook:question": {
+      "kind": "hook",
+      "keywords": ["do you", "can you", "which one", "guess", "am i wrong", "or nah", "what would you", "who else", "why does", "why do"]
+    },
+    "hook:controversy": {
+      "kind": "hook",
+      "keywords": ["stop doing", "you're doing", "youre doing", "wrong", "nobody tells you", "no one tells you", "overrated", "underrated", "worst", "myth", "don't", "dont do"]
+    },
+    "hook:numbered_list": {
+      "kind": "hook",
+      "keywords": ["3 ways", "5 ways", "3 things", "5 things", "one thing", "1 thing", "in 30 seconds", "in 60 seconds", "under a minute"]
+    },
+    "hook:identity": {
+      "kind": "hook",
+      "keywords": ["if you like", "for people who", "made this for", "this is for", "you'll get this", "youll get this", "iykyk", "only real"]
+    },
+    "hook:transformation": {
+      "kind": "hook",
+      "keywords": ["turned", "turning", "from a", "into a", "flip", "flipped", "sampled", "made a track from", "one sample", "1 sample", "60 minutes", "in an hour"]
+    },
+    "genre:minimal": {
+      "kind": "genre",
+      "keywords": ["minimal", "minimalism", "micro house", "microhouse", "rominimal", "romanian minimal", "sunwaves", "arpiar", "ricardo villalobos", "raresh", "praslea", "petre inspirescu", "cristi cons", "vlad caia", "sit"]
+    },
+    "genre:deep_tech": {
+      "kind": "genre",
+      "keywords": ["deep tech", "deeptech", "tech house", "techhouse", "rolling bass", "rolling bassline", "groove", "groovy", "shuffle", "swing", "dub techno", "deep house", "lossless", "hi tech soul"]
+    },
+    "genre:label_scene": {
+      "kind": "genre",
+      "keywords": ["ade", "amsterdam dance event", "dc10", "hi ibiza", "ibiza", "fabric", "berghain", "panorama bar", "tresor", "concrete", "sunwaves festival", "caprices", "label", "ep out", "va out"]
+    },
+    "subject:groove": {
+      "kind": "subject",
+      "keywords": ["groove", "swing", "shuffle", "shaker", "hats", "hi hats", "hihat", "percussion", "perc", "ghost note", "off beat", "offbeat", "syncopat", "pocket"]
+    },
+    "subject:bass": {
+      "kind": "subject",
+      "keywords": ["bassline", "bass line", "sub", "808", "low end", "rolling", "sidechain", "kick and bass", "kick bass"]
+    },
+    "subject:sound_design": {
+      "kind": "subject",
+      "keywords": ["sound design", "texture", "atmosphere", "field recording", "foley", "resample", "granular", "reverb", "delay", "dub chord", "stab", "pad", "noise"]
+    },
+    "subject:arrangement": {
+      "kind": "subject",
+      "keywords": ["arrangement", "arranging", "intro", "breakdown", "build", "drop", "outro", "16 bars", "32 bars", "structure", "transition", "loop to track"]
+    },
+    "subject:mixing": {
+      "kind": "subject",
+      "keywords": ["mixing", "mixdown", "mastering", "eq", "compression", "compressor", "saturation", "headroom", "loudness", "lufs", "stereo width", "mono"]
+    },
+    "subject:career": {
+      "kind": "subject",
+      "keywords": ["demo", "label", "sign", "signed", "a&r", "booking", "promo", "release", "streams", "spotify", "bandcamp", "beatport", "soundcloud", "royalt"]
+    },
+    "cta:follow": {
+      "kind": "cta",
+      "keywords": ["follow for", "follow me", "more like this", "part 2", "part two", "series", "day 1", "day 2", "episode"]
+    },
+    "cta:save": {
+      "kind": "cta",
+      "keywords": ["save this", "save it", "bookmark", "you'll need this", "youll need this", "come back to this"]
+    },
+    "cta:comment": {
+      "kind": "cta",
+      "keywords": ["comment", "drop a", "type", "tell me", "let me know", "link in bio", "dm me", "send this to", "tag a"]
+    }
+  },
+  "duration_buckets": [
+    [0, 7, "len:0-7s"],
+    [7, 15, "len:7-15s"],
+    [15, 30, "len:15-30s"],
+    [30, 60, "len:30-60s"],
+    [60, 90, "len:60-90s"],
+    [90, 100000, "len:90s+"]
+  ]
+}
