@@ -8,6 +8,8 @@ const state = {
   perPage: 50,
   ideas: [],
   categories: {},
+  generated: null,
+  ideaSource: "generated",
 };
 
 const fmt = {
@@ -250,7 +252,64 @@ function bars(container, rows, { label, value, format, n, center }) {
     .join("");
 }
 
+async function loadMovers() {
+  const card = $("#movers-card");
+  const trend = await api("/api/trends");
+
+  if (!trend.available) {
+    card.querySelector("#movers").innerHTML =
+      `<div class="empty">No weekly run yet. Run one from the <b>Data</b> tab, or <code>python -m app weekly</code>.
+       Movers need two runs to compare.</div>`;
+    return;
+  }
+  const d = trend.deltas;
+  if (d.first_run) {
+    card.querySelector("#movers").innerHTML =
+      `<div class="empty">Run ${trend.run_id} was the first — there is nothing to compare it against yet.
+       Next week's run will fill this in.</div>`;
+    return;
+  }
+
+  const rows = [...(d.tags.rising || []), ...(d.tags.falling || [])];
+  const section = (title, items) =>
+    items.length
+      ? `<div class="mover-group"><h3>${title}</h3>${items
+          .map(
+            (m) => `<div class="mover">
+              <span class="bar-label">${esc(m.tag)} <span class="bar-n">n=${m.count}</span></span>
+              <span class="mover-change ${m.change > 0 ? "up" : "down"}">${m.change > 0 ? "+" : ""}${m.change.toFixed(2)}</span>
+              <span class="mover-now">${m.previous_lift.toFixed(2)}× → <b>${m.lift.toFixed(2)}×</b></span>
+            </div>`
+          )
+          .join("")}</div>`
+      : "";
+
+  const newTags = (d.tags.new || [])
+    .map((t) => `<span class="tag-chip rising">${esc(t.tag)} ${t.lift.toFixed(2)}× <em>n=${t.count}</em></span>`)
+    .join("");
+
+  $("#movers").innerHTML =
+    `<div class="movers-grid">
+       ${section("Rising", d.tags.rising || [])}
+       ${section("Falling", d.tags.falling || [])}
+     </div>
+     ${newTags ? `<div class="evidence" style="margin-top:14px"><span class="evidence-label">new this week</span>${newTags}</div>` : ""}
+     ${
+       d.length && d.length.changed
+         ? `<p class="note" style="margin:14px 0 0">Best length bucket moved to <b>${esc(
+             d.length.bucket.replace("len:", "")
+           )}</b> (was ${esc((d.length.previous_bucket || "").replace("len:", ""))}).</p>`
+         : ""
+     }
+     ${
+       rows.length === 0
+         ? `<div class="empty">Nothing moved more than 0.04 since run ${d.compared_to_run}. That is a real result — it means your corpus is stable.</div>`
+         : ""
+     }`;
+}
+
 async function loadSignals() {
+  loadMovers();
   const s = await api("/api/signals");
   const tags = s.tags || [];
 
@@ -320,43 +379,99 @@ async function loadIdeas() {
         .map(([k, v]) => `<option value="${esc(k)}">${esc(v.split("—")[0].trim())}</option>`)
         .join("");
   }
+  if (!state.generated) {
+    state.generated = await api("/api/generated");
+  }
   renderIdeas();
 }
 
+function activeIdeaSet() {
+  return state.ideaSource === "library" ? state.ideas : (state.generated?.ideas ?? []);
+}
+
 function renderIdeas() {
+  const generated = state.ideaSource !== "library";
   const cat = $("#idea-cat").value;
   const goal = $("#idea-goal").value;
   const effort = $("#idea-effort").value;
-  const list = state.ideas.filter(
-    (i) => (!cat || i.category === cat) && (!goal || i.goal === goal) && (!effort || i.effort === effort)
+
+  // Category only means something for the hand-written library; generated ideas
+  // all share one category, so hide the control rather than offer a dead filter.
+  $("#idea-cat").style.display = generated ? "none" : "";
+
+  const list = activeIdeaSet().filter(
+    (i) =>
+      (generated || !cat || i.category === cat) &&
+      (!goal || i.goal === goal) &&
+      (!effort || i.effort === effort)
   );
 
+  const meta = state.generated || {};
+  $("#idea-source-note").textContent = generated
+    ? meta.count
+      ? `run ${meta.run_id} · ${fmt.date(meta.generated_at)} · ${
+          meta.source === "claude" ? "written by Claude from this week's signals" : "composed from this week's signals"
+        }`
+      : "no weekly run yet — open the Data tab and run the weekly job"
+    : "96 hand-written formats, stable between runs";
+
   $("#idea-count").textContent = `${list.length} ideas`;
-  $("#ideas").innerHTML = list
+  $("#ideas").innerHTML = list.length
+    ? list.map(ideaCard).join("")
+    : `<div class="empty">${
+        generated
+          ? "Nothing generated yet. Run the weekly job from the <b>Data</b> tab, or <code>python -m app weekly</code>."
+          : "No library ideas match those filters."
+      }</div>`;
+}
+
+function ideaCard(i) {
+  const evidence = (i.evidence || [])
     .map(
-      (i) => `<article class="idea">
-        <div class="idea-top">
-          <h3>${esc(i.title)}</h3>
-          <span class="pill goal-${esc(i.goal)}">${esc(i.goal)}</span>
-        </div>
-        ${i.hook ? `<div class="hook">${esc(i.hook)}</div>` : `<div class="hook">no hook text — open on the visual</div>`}
-        <ol>${i.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
-        <div class="why">${esc(i.why)}</div>
-        ${i.cta ? `<div class="cta">CTA: ${esc(i.cta)}</div>` : ""}
-        <div class="pills">
-          <span class="pill">${esc(i.length_s)}s</span>
-          <span class="pill">${esc(i.effort)} effort</span>
-          <span class="pill">${esc(state.categories[i.category] || i.category).split("—")[0].trim()}</span>
-          <span class="pill">${esc(i.id)}</span>
-        </div>
-      </article>`
+      (e) =>
+        `<span class="tag-chip${e.rising ? " rising" : ""}" title="${
+          e.rising ? "rising since last week" : "measured this week"
+        }">${esc(e.tag)}${e.lift ? ` ${e.lift.toFixed(2)}×` : ""} <em>n=${e.count}</em></span>`
     )
     .join("");
+  return `<article class="idea">
+    <div class="idea-top">
+      <h3>${esc(i.title)}</h3>
+      <span class="pill goal-${esc(i.goal)}">${esc(i.goal)}</span>
+    </div>
+    ${
+      i.hook
+        ? `<div class="hook">${esc(i.hook)}</div>`
+        : `<div class="hook silent">no hook text — open on the visual</div>`
+    }
+    <ol>${i.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+    <div class="why">${esc(i.why)}</div>
+    ${i.cta ? `<div class="cta">CTA: ${esc(i.cta)}</div>` : ""}
+    ${evidence ? `<div class="evidence"><span class="evidence-label">evidence</span>${evidence}</div>` : ""}
+    <div class="pills">
+      <span class="pill">${esc(i.length_s)}s</span>
+      <span class="pill">${esc(i.effort)} effort</span>
+      ${
+        i.category === "generated"
+          ? `<span class="pill">${esc(i.source === "claude" ? "claude" : "measured")}</span>`
+          : `<span class="pill">${esc(state.categories[i.category] || i.category).split("—")[0].trim()}</span>`
+      }
+      <span class="pill">${esc(i.id)}</span>
+    </div>
+  </article>`;
 }
 
 ["idea-cat", "idea-goal", "idea-effort"].forEach((id) =>
   $("#" + id).addEventListener("change", renderIdeas)
 );
+
+$("#idea-source").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-source]");
+  if (!button) return;
+  state.ideaSource = button.dataset.source;
+  $$("#idea-source button").forEach((b) => b.classList.toggle("active", b === button));
+  renderIdeas();
+});
 
 /* ----------------------------------------------------------------- plan */
 
@@ -540,7 +655,33 @@ $("#do-watch").addEventListener("click", async () => {
   loadDataTab();
 });
 
+$("#do-weekly").addEventListener("click", () =>
+  run("weekly job", () => post("/api/weekly", { collect: $("#weekly-collect").checked }))
+);
+
+async function loadRunHistory() {
+  const { runs } = await api("/api/runs?limit=8");
+  $("#run-history").innerHTML = runs.length
+    ? `<div class="tablewrap"><table>
+        <thead><tr><th>run</th><th>when</th><th>ranked</th><th>ideas</th><th>status</th></tr></thead>
+        <tbody>${runs
+          .map(
+            (r) => `<tr>
+              <td class="num">${r.id}</td>
+              <td class="handle">${fmt.date(r.started_at)}</td>
+              <td class="num">${fmt.n(r.scored)}</td>
+              <td class="num">${r.idea_count || 0}${
+                r.idea_source ? ` <span class="muted">${esc(r.idea_source)}</span>` : ""
+              }</td>
+              <td><span class="pill ${r.status === "ok" ? "goal-saves" : "goal-follows"}">${esc(r.status)}</span></td>
+            </tr>`
+          )
+          .join("")}</tbody></table></div>`
+    : `<div class="muted">no runs yet</div>`;
+}
+
 async function loadDataTab() {
+  loadRunHistory();
   const [{ watchlist }, summary] = await Promise.all([api("/api/watchlist"), api("/api/summary")]);
   $("#watchlist").innerHTML = watchlist.length
     ? `<div class="pills">${watchlist
@@ -561,7 +702,9 @@ async function refreshAll() {
   await loadSummary();
   await loadBoard();
   playbookLoaded = false;
+  state.generated = null; // a weekly run replaces this week's ideas
   if ($("#tab-signals").classList.contains("active")) loadSignals();
+  if ($("#tab-ideas").classList.contains("active")) loadIdeas();
 }
 
 async function populateTags() {

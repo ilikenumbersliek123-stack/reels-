@@ -1,14 +1,19 @@
 # Reel Tracker — minimal / deep tech
 
 A local app that ranks the top 1000 performing Instagram Reels in the minimal /
-deep tech niche, mines them for what the winners have in common, and pairs that
-with 96 promotional video ideas and a 90-day plan for going from zero followers.
+deep tech niche, re-scans them every week, and turns what it measures into
+promotional video ideas — 96 hand-written formats as a baseline, plus a fresh
+set generated from each scan — alongside a 90-day plan for going from zero
+followers.
 
-No dependencies. Python 3.9+ stdlib, SQLite, and a vanilla JS frontend.
+No dependencies. Python 3.9+ stdlib, SQLite, and a vanilla JS frontend. The one
+optional extra is `anthropic`, if you want Claude writing the weekly ideas
+instead of the built-in generator.
 
 ```bash
-python -m app seed      # load the labelled sample corpus and rank it
-python -m app serve     # http://127.0.0.1:8420
+python -m app seed                 # load the labelled sample corpus and rank it
+python -m app serve                # http://127.0.0.1:8420
+python -m app schedule --install   # then re-scan and re-generate every Monday
 ```
 
 ---
@@ -43,8 +48,8 @@ Full detail: [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md).
 | Tab | What it is for |
 |---|---|
 | **Top 1000** | The ranked leaderboard. Filter by tag, account size, or text; sort by score, reach multiple, save+share rate, or views/day. Click any row for the full breakdown. |
-| **Signals** | What separates winners from also-rans: tag lift, length curve, posting time, breakout accounts, audio. |
-| **Ideas** | 96 video ideas, each with the literal on-screen hook, a shot list, and the one metric it is built to move. Filter by goal and effort. |
+| **Signals** | **Movers** — what changed since last week's scan — then what separates winners from also-rans: tag lift, length curve, posting time, breakout accounts, audio. |
+| **Ideas** | **This week** — ideas generated from the latest scan, each carrying the lifts and sample sizes behind it — and **Library**, the 96 hand-written formats. Filter by goal and effort. |
 | **Plan** | The 90-day playbook, rendered from `docs/PLAYBOOK.md`. |
 | **Data** | Load, collect, recompute, manage the watchlist. |
 
@@ -79,43 +84,78 @@ python -m app seed [--count 2000]        # labelled synthetic corpus
 python -m app import reels.csv           # CSV / JSON / JSONL, flexible columns
 python -m app collect --kind account --targets a,b,c    # needs APIFY_TOKEN
 python -m app collect-own                # your reels, real insights, via Graph API
-python -m app refresh [--half-life 180]  # recompute scores
+python -m app refresh [--window-days 90] # recompute scores
 python -m app top --limit 25 [--tag format:tutorial] [--max-followers 5000]
 python -m app signals                    # pattern mining in the terminal
 python -m app export top1000.csv         # spreadsheet of the top 1000
 python -m app watch "a,b,c" --kind account
 python -m app purge-sample
+
+python -m app weekly [--window-days 90] [--ideas 12] [--llm auto|on|off]
+python -m app schedule --install [--cron "0 9 * * 1"] | --show | --remove
+python -m app runs                       # history of weekly runs
+python -m app ideas [--run N]            # generated ideas, with their evidence
 python -m app serve [--port 8420]
 ```
 
 All commands take `--db path.db` (default `reels.db`, or `$REELS_DB`).
 
-## Weekly routine
+## The weekly loop
 
 ```bash
-python -m app collect-own      # your own numbers, including saves and shares
-python -m app collect          # the watchlist, if you use a provider
-python -m app signals          # what changed
+python -m app weekly               # collect, re-rank, diff, generate
+python -m app schedule --install    # every Monday at 09:00
 ```
 
-Then read the three numbers that matter, in `docs/PLAYBOOK.md` → *Measuring,
-without lying to yourself*.
+One command collects from every configured source, re-ranks a **rolling 90-day
+window** — "the best reels right now", not "the best ever collected" — diffs the
+result against last week's stored snapshot, and writes a fresh set of ideas plus
+a dated report in `reports/`.
+
+Every generated idea carries the evidence behind it: the tags, their lift, and
+the sample size. That is the whole point — you can disagree with the evidence
+rather than with a vibe. The generator only builds on tags at 1.00× or above,
+prefers ones that are **rising**, and refuses incompatible pairings (a DJ cam
+cannot "blend" sidechain depth).
+
+Two generators are available. The default composes from the signals with no
+dependencies. The optional one has Claude write them from the same evidence —
+better prose, sharper hooks:
+
+```bash
+pip install anthropic && export ANTHROPIC_API_KEY=...
+python -m app weekly --llm on
+```
+
+It is given only the measured numbers and told not to invent any; lifts on the
+cards are re-resolved from the database afterwards, so a generated idea can
+never quote a statistic your corpus does not contain. If the package,
+credentials or network are missing, the run says so and composes instead.
+
+`.github/workflows/weekly.yml` runs the same job on a schedule without needing a
+machine left awake. Full detail: [`docs/WEEKLY.md`](docs/WEEKLY.md).
 
 ## Layout
 
 ```
 app/
   db.py          SQLite schema and queries
-  scoring.py     the composite ranking model
+  scoring.py     the composite ranking model, incl. the rolling window
   tagging.py     caption -> tags, via data/taxonomy.json
   analytics.py   tag lift, length curve, breakout accounts, audio
+  trends.py      week-over-week diffing and the evidence pool
+  ideagen.py     compose ideas from measured signals (no dependencies)
+  ideagen_llm.py optional: have Claude write them from the same evidence
+  weekly.py      the loop — collect, re-rank, diff, generate, report
+  schedule.py    crontab install/remove
   pipeline.py    ingest -> tag -> score -> query
   seed.py        labelled synthetic corpus
   server.py      stdlib HTTP dashboard, localhost only
   sources/       files.py · apify.py · graph.py · base.py (normalisation)
 web/             index.html · app.js · styles.css — no build step
 data/            ideas.json (96 ideas) · taxonomy.json (edit this)
-docs/            PLAYBOOK.md · DATA_SOURCES.md
+docs/            PLAYBOOK.md · DATA_SOURCES.md · WEEKLY.md
+reports/         dated weekly reports, written by the job
 tests/           python -m unittest discover tests -v
 ```
 
@@ -126,7 +166,7 @@ so adding a keyword group is how you test a hunch about what works.
 ## Tests
 
 ```bash
-python -m unittest discover tests -v      # 25 tests, no dependencies
+python -m unittest discover tests -v      # 55 tests, no dependencies
 ```
 
 ## Adding another provider

@@ -12,9 +12,11 @@ delete without ceremony.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Iterable, Iterator
 
 DEFAULT_DB = os.environ.get("REELS_DB", "reels.db")
@@ -82,6 +84,35 @@ CREATE TABLE IF NOT EXISTS watchlist (
     PRIMARY KEY (kind, value)
 );
 
+-- One row per weekly job. signals_json is the full pattern-mining output for that
+-- week, which is what makes week-over-week comparison possible at all: without a
+-- stored snapshot there is nothing to diff the next run against.
+CREATE TABLE IF NOT EXISTS runs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at   TEXT,
+    finished_at  TEXT,
+    status       TEXT,          -- running | ok | failed
+    window_days  INTEGER,
+    collected    INTEGER DEFAULT 0,
+    inserted     INTEGER DEFAULT 0,
+    updated      INTEGER DEFAULT 0,
+    scored       INTEGER DEFAULT 0,
+    idea_count   INTEGER DEFAULT 0,
+    idea_source  TEXT DEFAULT '',
+    signals_json TEXT,
+    deltas_json  TEXT,
+    notes        TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS generated_ideas (
+    id           TEXT PRIMARY KEY,
+    run_id       INTEGER NOT NULL,
+    created_at   TEXT,
+    source       TEXT,          -- measured | claude
+    payload_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_generated_run ON generated_ideas(run_id);
 CREATE INDEX IF NOT EXISTS idx_reels_handle   ON reels(handle);
 CREATE INDEX IF NOT EXISTS idx_reels_posted   ON reels(posted_at);
 CREATE INDEX IF NOT EXISTS idx_tags_tag       ON tags(tag);
@@ -182,6 +213,77 @@ def write_scores(conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]) -> No
         f"INSERT INTO scores ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
         [[r.get(c) for c in cols] for r in rows],
     )
+
+
+def start_run(conn: sqlite3.Connection, window_days: int) -> int:
+    cursor = conn.execute(
+        "INSERT INTO runs (started_at, status, window_days) VALUES (?,?,?)",
+        (datetime.now(timezone.utc).isoformat(), "running", window_days),
+    )
+    return int(cursor.lastrowid)
+
+
+def finish_run(conn: sqlite3.Connection, run_id: int, **fields: Any) -> None:
+    fields.setdefault("finished_at", datetime.now(timezone.utc).isoformat())
+    allowed = {
+        "finished_at", "status", "collected", "inserted", "updated", "scored",
+        "idea_count", "idea_source", "signals_json", "deltas_json", "notes",
+    }
+    usable = {k: v for k, v in fields.items() if k in allowed}
+    if not usable:
+        return
+    assignments = ", ".join(f"{k}=?" for k in usable)
+    conn.execute(f"UPDATE runs SET {assignments} WHERE id=?", [*usable.values(), run_id])
+
+
+def runs(conn: sqlite3.Connection, limit: int = 20) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, started_at, finished_at, status, window_days, collected, inserted, "
+        "updated, scored, idea_count, idea_source, notes FROM runs ORDER BY id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
+def get_run(conn: sqlite3.Connection, run_id: int | None = None) -> sqlite3.Row | None:
+    if run_id is None:
+        return conn.execute(
+            "SELECT * FROM runs WHERE status='ok' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    return conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+
+
+def previous_successful_run(conn: sqlite3.Connection, before_id: int) -> sqlite3.Row | None:
+    """The last run that produced a usable snapshot, for week-over-week diffing."""
+    return conn.execute(
+        "SELECT * FROM runs WHERE id < ? AND status='ok' AND signals_json IS NOT NULL "
+        "ORDER BY id DESC LIMIT 1",
+        (before_id,),
+    ).fetchone()
+
+
+def save_generated(conn: sqlite3.Connection, run_id: int, source: str, ideas: Iterable[dict[str, Any]]) -> int:
+    stamp = datetime.now(timezone.utc).isoformat()
+    rows = [(i["id"], run_id, stamp, source, json.dumps(i)) for i in ideas]
+    conn.executemany(
+        "INSERT OR REPLACE INTO generated_ideas (id, run_id, created_at, source, payload_json) "
+        "VALUES (?,?,?,?,?)",
+        rows,
+    )
+    return len(rows)
+
+
+def generated_ideas(conn: sqlite3.Connection, run_id: int | None = None) -> list[dict[str, Any]]:
+    if run_id is None:
+        latest = conn.execute(
+            "SELECT run_id FROM generated_ideas ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        if not latest:
+            return []
+        run_id = latest["run_id"]
+    rows = conn.execute(
+        "SELECT payload_json FROM generated_ideas WHERE run_id=? ORDER BY id", (run_id,)
+    ).fetchall()
+    return [json.loads(r["payload_json"]) for r in rows]
 
 
 def watchlist(conn: sqlite3.Connection, kind: str | None = None) -> list[sqlite3.Row]:

@@ -194,6 +194,7 @@ def corpus_summary(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "p90_views": int(sorted(views)[int(len(views) * 0.9)]) if views else 0,
         "max_views": max(views) if views else 0,
         "median_engagement_rate": round(_median([r.get("engagement_rate", 0) for r in rows]), 5),
+        "median_intent_rate": round(_median([r.get("intent_rate", 0) for r in rows]), 5),
         "median_reach_multiple": round(_median([r.get("reach_multiple", 0) for r in rows]), 2),
         "sample_rows": sum(1 for r in rows if r.get("is_sample")),
         "newest_post": max((str(r.get("posted_at") or "") for r in rows), default=""),

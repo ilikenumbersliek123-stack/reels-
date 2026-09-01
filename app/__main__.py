@@ -10,6 +10,11 @@
     python -m app signals              # what the winners have in common
     python -m app export top1000.csv   # the top 1000 as a spreadsheet
     python -m app purge-sample         # delete every synthetic row
+
+    python -m app weekly               # the weekly loop: collect, re-rank, diff, new ideas
+    python -m app schedule --install   # run that every Monday at 09:00
+    python -m app runs                 # history of weekly runs
+    python -m app ideas                # this week's generated ideas
 """
 
 from __future__ import annotations
@@ -17,11 +22,18 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sys
 from typing import Any
 
 from . import db, pipeline, scoring, seed
 from .sources import files as file_source
+
+
+def schedule_default() -> str:
+    from . import schedule
+
+    return schedule.DEFAULT_CRON
 
 
 def _open(args: argparse.Namespace):
@@ -95,7 +107,9 @@ def cmd_collect_own(args: argparse.Namespace) -> int:
 
 def cmd_refresh(args: argparse.Namespace) -> int:
     conn = _open(args)
-    result = pipeline.refresh(conn, half_life_days=args.half_life, min_views=args.min_views)
+    result = pipeline.refresh(
+        conn, half_life_days=args.half_life, min_views=args.min_views, window_days=args.window_days
+    )
     conn.commit()
     print(json.dumps(result, indent=2))
     return 0
@@ -200,6 +214,96 @@ def cmd_purge_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_weekly(args: argparse.Namespace) -> int:
+    from . import weekly
+
+    result = weekly.run(
+        db_path=args.db,
+        window_days=args.window_days,
+        do_collect=not args.no_collect,
+        llm=args.llm,
+        idea_count=args.ideas,
+        collect_limit=args.limit,
+    )
+    print(f"run {result['run_id']} · {result['status']}")
+    print(f"  {result['headline']}")
+    print(
+        f"  collected {result['collected']} ({result['inserted']} new, {result['updated']} updated) · "
+        f"ranked {result['ranked_top']} of {result['scored']} in a {result['window_days']}-day window"
+    )
+    print(f"  {result['ideas']} ideas ({result['idea_source']})")
+    for note in result["notes"]:
+        print(f"  - {note}")
+    if result.get("report"):
+        print(f"  report: {result['report']}")
+    return 0
+
+
+def cmd_runs(args: argparse.Namespace) -> int:
+    conn = _open(args)
+    rows = db.runs(conn, limit=args.limit)
+    if not rows:
+        print("No runs yet. Try: python -m app weekly")
+        return 1
+    print(f"{'id':>4}  {'started':<20} {'status':<8} {'scored':>7} {'ideas':>6}  source")
+    print("-" * 76)
+    for row in rows:
+        print(
+            f"{row['id']:>4}  {str(row['started_at'])[:19]:<20} {row['status']:<8} "
+            f"{row['scored'] or 0:>7} {row['idea_count'] or 0:>6}  {row['idea_source'] or ''}"
+        )
+    return 0
+
+
+def cmd_ideas(args: argparse.Namespace) -> int:
+    conn = _open(args)
+    ideas = db.generated_ideas(conn, run_id=args.run)
+    if not ideas:
+        print("No generated ideas yet. Try: python -m app weekly")
+        return 1
+    for idea in ideas:
+        print(f"\n{idea['title']}  [{idea['goal']} · {idea['effort']} · {idea['length_s']}s · {idea['id']}]")
+        print(f"  hook: {idea['hook'] or '(none — open on the visual)'}")
+        for i, shot in enumerate(idea["shots"], 1):
+            print(f"  {i}. {shot}")
+        print(f"  {idea['why']}")
+        if idea.get("evidence"):
+            bits = ", ".join(
+                f"{e['tag']}" + (f" {e['lift']:.2f}x" if e.get("lift") else "") + f" (n={e['count']})"
+                for e in idea["evidence"]
+            )
+            print(f"  evidence: {bits}")
+    print(f"\n{len(ideas)} ideas.")
+    return 0
+
+
+def cmd_schedule(args: argparse.Namespace) -> int:
+    from . import schedule
+
+    try:
+        if args.remove:
+            print("removed" if schedule.remove() else "nothing installed")
+            return 0
+        if args.show:
+            lines = schedule.show()
+            print("\n".join(lines) if lines else "not scheduled")
+            return 0
+        entry = schedule.install(
+            db_path=os.path.abspath(args.db),
+            cron=args.cron,
+            window_days=args.window_days,
+            llm=args.llm,
+            ideas=args.ideas,
+        )
+        print("installed:")
+        print(f"  {entry}")
+        print("\nCheck it with: python -m app schedule --show")
+        return 0
+    except schedule.CronUnavailable as exc:
+        print(str(exc))
+        return 2
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from . import server
 
@@ -233,7 +337,36 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("refresh", help="recompute scores and ranks")
     p.add_argument("--half-life", dest="half_life", type=float, default=scoring.DEFAULT_HALF_LIFE_DAYS)
     p.add_argument("--min-views", dest="min_views", type=int, default=scoring.MIN_VIEWS)
+    p.add_argument("--window-days", dest="window_days", type=int, default=None,
+                   help="only rank reels posted within this many days")
     p.set_defaults(func=cmd_refresh)
+
+    p = sub.add_parser("weekly", help="collect, re-rank the window, diff vs last week, write new ideas")
+    p.add_argument("--window-days", dest="window_days", type=int, default=90)
+    p.add_argument("--no-collect", dest="no_collect", action="store_true",
+                   help="skip providers and re-rank what is already stored")
+    p.add_argument("--llm", choices=["auto", "on", "off"], default="auto",
+                   help="auto: let Claude write the ideas when available (default)")
+    p.add_argument("--ideas", type=int, default=12)
+    p.add_argument("--limit", type=int, default=50, help="reels per collection target")
+    p.set_defaults(func=cmd_weekly)
+
+    p = sub.add_parser("runs", help="history of weekly runs")
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_runs)
+
+    p = sub.add_parser("ideas", help="print the generated ideas from a run")
+    p.add_argument("--run", type=int, default=None, help="run id (default: most recent)")
+    p.set_defaults(func=cmd_ideas)
+
+    p = sub.add_parser("schedule", help="install the weekly job into your crontab")
+    p.add_argument("--cron", default=schedule_default(), help="cron expression (default: Mondays 09:00)")
+    p.add_argument("--window-days", dest="window_days", type=int, default=90)
+    p.add_argument("--llm", choices=["auto", "on", "off"], default="auto")
+    p.add_argument("--ideas", type=int, default=12)
+    p.add_argument("--remove", action="store_true", help="remove the scheduled job")
+    p.add_argument("--show", action="store_true", help="show the installed entry")
+    p.set_defaults(func=cmd_schedule)
 
     p = sub.add_parser("top", help="print the leaderboard")
     p.add_argument("--limit", type=int, default=25)

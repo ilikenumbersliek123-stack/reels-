@@ -144,6 +144,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/ideas": self.api_ideas,
             "/api/playbook": self.api_playbook,
             "/api/watchlist": self.api_watchlist,
+            "/api/runs": self.api_runs,
+            "/api/trends": self.api_trends,
+            "/api/generated": self.api_generated,
         }
 
     def _post_routes(self) -> dict[str, Callable[[dict[str, Any]], Any]]:
@@ -154,6 +157,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/collect": self.api_collect,
             "/api/purge-sample": self.api_purge_sample,
             "/api/watchlist/add": self.api_watch_add,
+            "/api/weekly": self.api_weekly,
         }
 
     def api_health(self, params: dict[str, list[str]]) -> Any:
@@ -241,6 +245,54 @@ class Handler(BaseHTTPRequestHandler):
             for value in values:
                 db.add_watch(conn, kind, str(value), body.get("note", ""))
             return {"watchlist": [dict(r) for r in db.watchlist(conn)]}
+
+    def api_runs(self, params: dict[str, list[str]]) -> Any:
+        with db.session(self.db_path) as conn:
+            db.init(conn)
+            rows = [dict(r) for r in db.runs(conn, limit=_int(params, "limit", 20) or 20)]
+            return {"runs": rows}
+
+    def api_trends(self, params: dict[str, list[str]]) -> Any:
+        """The stored week-over-week diff, so the UI never recomputes it."""
+        with db.session(self.db_path) as conn:
+            db.init(conn)
+            run = db.get_run(conn, _int(params, "run"))
+            if not run or not run["deltas_json"]:
+                return {"available": False, "reason": "no completed weekly run yet"}
+            return {
+                "available": True,
+                "run_id": run["id"],
+                "started_at": run["started_at"],
+                "window_days": run["window_days"],
+                "idea_source": run["idea_source"],
+                "notes": run["notes"],
+                "deltas": json.loads(run["deltas_json"]),
+            }
+
+    def api_generated(self, params: dict[str, list[str]]) -> Any:
+        with db.session(self.db_path) as conn:
+            db.init(conn)
+            run_id = _int(params, "run")
+            ideas = db.generated_ideas(conn, run_id=run_id)
+            run = db.get_run(conn, run_id)
+            return {
+                "count": len(ideas),
+                "ideas": ideas,
+                "run_id": run["id"] if run else None,
+                "generated_at": run["started_at"] if run else None,
+                "source": run["idea_source"] if run else "",
+            }
+
+    def api_weekly(self, body: dict[str, Any]) -> Any:
+        from . import weekly
+
+        return weekly.run(
+            db_path=self.db_path,
+            window_days=int(body.get("window_days", weekly.DEFAULT_WINDOW_DAYS)),
+            do_collect=bool(body.get("collect", True)),
+            llm=str(body.get("llm", "auto")),
+            idea_count=int(body.get("ideas", weekly.DEFAULT_IDEA_COUNT)),
+        )
 
     def api_refresh(self, body: dict[str, Any]) -> Any:
         with db.session(self.db_path) as conn:

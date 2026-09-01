@@ -1,0 +1,70 @@
+name: Weekly reel scan
+
+# Mondays at 09:00 UTC. GitHub delays scheduled runs under load, so treat the
+# time as approximate — nothing here cares about the exact minute.
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "Rolling window to rank (days)"
+        default: "90"
+      ideas:
+        description: "How many ideas to generate"
+        default: "12"
+      llm:
+        description: "auto | on | off"
+        default: "auto"
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The database carries the corpus and the previous run's snapshot, which is
+      # what makes week-over-week comparison possible. If the cache is ever
+      # evicted the next run simply reports itself as a first run.
+      - name: Restore corpus
+        uses: actions/cache@v4
+        with:
+          path: reels.db
+          key: reels-db-${{ github.run_id }}
+          restore-keys: reels-db-
+
+      - name: Install the optional idea writer
+        if: env.ANTHROPIC_API_KEY != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pip install anthropic
+
+      - name: Run the weekly job
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python -m app weekly \
+            --window-days "${{ github.event.inputs.window_days || '90' }}" \
+            --ideas "${{ github.event.inputs.ideas || '12' }}" \
+            --llm "${{ github.event.inputs.llm || 'auto' }}"
+
+      - name: Export the current top 1000
+        run: python -m app export reports/top1000.csv
+
+      - name: Commit the report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          git diff --staged --quiet || git commit -m "Weekly scan: $(date -u +%Y-%m-%d)"
+          git push

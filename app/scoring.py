@@ -137,16 +137,40 @@ def recency_factor(posted_at: Any, half_life_days: float = DEFAULT_HALF_LIFE_DAY
     return 0.5 ** (age_days(posted_at) / half_life_days)
 
 
+def within_window(posted_at: Any, window_days: float | None, now: datetime | None = None) -> bool:
+    """Whether a reel was posted inside the rolling window.
+
+    A reel with no usable date is kept: absent evidence that it is old is not
+    evidence that it is, and dropping it would silently bias the corpus toward
+    whichever provider happens to return timestamps.
+    """
+    if not window_days:
+        return True
+    if _parse_ts(posted_at) is None:
+        return True
+    return age_days(posted_at, now) <= window_days
+
+
 def rank_corpus(
     reels: Sequence[dict[str, Any]],
     histories: dict[str, Sequence[dict[str, Any]]] | None = None,
     half_life_days: float = DEFAULT_HALF_LIFE_DAYS,
     min_views: int = MIN_VIEWS,
+    window_days: float | None = None,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Score every eligible reel and return rows ordered best-first, rank 1..N."""
+    """Score every eligible reel and return rows ordered best-first, rank 1..N.
+
+    `window_days` restricts ranking to reels posted inside a rolling window —
+    the difference between "the best reels ever collected" and "the best reels
+    right now", which is what a weekly job is actually asking for.
+    """
     histories = histories or {}
-    eligible = [r for r in reels if (r.get("views") or 0) >= min_views]
+    eligible = [
+        r for r in reels
+        if (r.get("views") or 0) >= min_views
+        and within_window(r.get("posted_at"), window_days, now)
+    ]
     if not eligible:
         return []
 

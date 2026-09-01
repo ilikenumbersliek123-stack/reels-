@@ -184,6 +184,41 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numer
   background: var(--panel-2); border: 1px solid var(--line);
   border-radius: 3px; padding: 1px 5px; margin: 2px 3px 0 0;
 }
+.tag-chip em { font-style: normal; opacity: 0.6; }
+.tag-chip.rising { color: var(--accent); border-color: var(--accent-dim); }
+
+.idea .hook.silent { color: var(--muted); background: var(--panel-2); border-left-color: var(--line); font-style: italic; }
+.evidence { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px; padding-top: 10px; border-top: 1px solid var(--line); }
+.evidence-label {
+  font: 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin-right: 8px;
+}
+
+/* ---------------------------------------------------------------- movers */
+
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.segmented button {
+  border: 0; border-radius: 0; background: var(--panel-2); color: var(--muted);
+  font: 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 14px;
+}
+.segmented button + button { border-left: 1px solid var(--line); }
+.segmented button.active { background: var(--accent-dim); color: var(--ink); }
+
+.movers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+.mover-group h3 {
+  font: 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 10px;
+}
+.mover {
+  display: grid; grid-template-columns: 1fr 56px 118px; gap: 10px; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid var(--line);
+}
+.mover:last-child { border-bottom: 0; }
+.mover-change { font: 600 12px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.mover-change.up { color: var(--accent); }
+.mover-change.down { color: var(--danger); }
+.mover-now { font: 11.5px var(--mono); color: var(--muted); text-align: right; }
+.mover-now b { color: var(--ink); }
 
 /* ------------------------------------------------------------------- prose */
 

@@ -25,6 +25,7 @@ def refresh(
     conn: sqlite3.Connection,
     half_life_days: float = scoring.DEFAULT_HALF_LIFE_DAYS,
     min_views: int = scoring.MIN_VIEWS,
+    window_days: float | None = None,
 ) -> dict[str, Any]:
     reels = [dict(r) for r in db.all_reels(conn)]
     histories: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -32,12 +33,17 @@ def refresh(
         histories[row["reel_id"]].append(dict(row))
 
     scored = scoring.rank_corpus(
-        reels, histories=histories, half_life_days=half_life_days, min_views=min_views
+        reels,
+        histories=histories,
+        half_life_days=half_life_days,
+        min_views=min_views,
+        window_days=window_days,
     )
     db.write_scores(conn, scored)
     return {
         "scored": len(scored),
-        "skipped_below_min_views": len(reels) - len(scored),
+        "excluded": len(reels) - len(scored),
+        "window_days": window_days,
         "top_n": min(TOP_N, len(scored)),
     }
 
