@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reel Tracker — minimal / deep tech</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%230b0c0d'/><circle cx='8' cy='8' r='3' fill='%236ee7a8'/></svg>">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>REEL TRACKER</h1>
+    <span class="sub">minimal / deep tech</span>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<div id="sample-banner" class="banner" hidden>
+  <strong>Sample data.</strong>
+  <span id="sample-detail"></span>
+  Numbers here are synthetic and exist to demonstrate the method. Load real data before you draw conclusions.
+</div>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="board" class="active">Top 1000</button>
+  <button data-tab="signals">Signals</button>
+  <button data-tab="ideas">Ideas</button>
+  <button data-tab="plan">Plan</button>
+  <button data-tab="data">Data</button>
+</nav>
+
+<main>
+  <!-- ------------------------------------------------------ leaderboard -->
+  <section id="tab-board" class="tab active">
+    <div class="controls">
+      <input id="q" type="search" placeholder="search caption, handle, audio">
+      <select id="tag"><option value="">all tags</option></select>
+      <select id="maxfollowers">
+        <option value="">any account size</option>
+        <option value="1000">under 1k followers</option>
+        <option value="5000">under 5k</option>
+        <option value="25000">under 25k</option>
+        <option value="100000">under 100k</option>
+      </select>
+      <select id="sort">
+        <option value="rank">by score</option>
+        <option value="views">by views</option>
+        <option value="reach_multiple">by reach multiple</option>
+        <option value="intent_rate">by save + share rate</option>
+        <option value="engagement_rate">by engagement rate</option>
+        <option value="velocity">by views/day</option>
+        <option value="posted_at">newest first</option>
+      </select>
+      <label class="check"><input type="checkbox" id="hidesample"> hide sample rows</label>
+      <span class="spacer"></span>
+      <span id="board-count" class="muted"></span>
+    </div>
+
+    <div class="tablewrap">
+      <table id="board">
+        <thead>
+          <tr>
+            <th>#</th><th>score</th><th>views</th><th title="views divided by the account's followers">×reach</th>
+            <th title="(likes + 3×comments) / views">eng</th>
+            <th title="(saves + 1.5×shares) / views — the follow-intent signal">intent</th>
+            <th>len</th><th>account</th><th>caption</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button id="prev">← previous</button>
+      <span id="page-label" class="muted"></span>
+      <button id="next">next →</button>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- signals -->
+  <section id="tab-signals" class="tab">
+    <div class="grid">
+      <div class="card wide">
+        <h2>What the winners have in common</h2>
+        <p class="note">Median score of reels carrying each tag, against the corpus median. Above 1.00 out-performs the field. Measured across <em>every</em> scored reel, not just the top 1000 — comparing winners only to other winners flattens the contrast. Tags with fewer than 5 examples are hidden; they are noise.</p>
+        <div id="taglift"></div>
+      </div>
+      <div class="card">
+        <h2>Length</h2>
+        <p class="note">Retention is the whole game. If your data disagrees with received wisdom, believe your data.</p>
+        <div id="durations"></div>
+      </div>
+      <div class="card">
+        <h2>Posting time (UTC)</h2>
+        <p class="note">Weak signal, shown so you can stop worrying about it.</p>
+        <div id="timing"></div>
+      </div>
+      <div class="card wide">
+        <h2>Breakout accounts</h2>
+        <p class="note">Small followings, big reach multiples. This is the most directly copyable list in the app — these people got reach without an audience, recently.</p>
+        <div class="tablewrap"><table id="breakouts">
+          <thead><tr><th>account</th><th>followers</th><th>reels</th><th>best ×reach</th><th>best views</th><th>what they do</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card wide">
+        <h2>Audio</h2>
+        <div class="tablewrap"><table id="audio">
+          <thead><tr><th>audio</th><th>uses</th><th>median score</th><th>median views</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ ideas -->
+  <section id="tab-ideas" class="tab">
+    <div class="controls">
+      <select id="idea-cat"><option value="">all categories</option></select>
+      <select id="idea-goal">
+        <option value="">any goal</option>
+        <option value="reach">reach</option>
+        <option value="saves">saves</option>
+        <option value="shares">shares</option>
+        <option value="comments">comments</option>
+        <option value="follows">follows</option>
+      </select>
+      <select id="idea-effort">
+        <option value="">any effort</option>
+        <option value="low">low effort</option>
+        <option value="med">medium effort</option>
+        <option value="high">high effort</option>
+      </select>
+      <span class="spacer"></span>
+      <span id="idea-count" class="muted"></span>
+    </div>
+    <div id="ideas" class="ideas"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------- plan -->
+  <section id="tab-plan" class="tab">
+    <article id="playbook" class="prose"></article>
+  </section>
+
+  <!-- ------------------------------------------------------------- data -->
+  <section id="tab-data" class="tab">
+    <div class="grid">
+      <div class="card">
+        <h2>Load data</h2>
+        <p class="note">Instagram has no public API for other people's Reel metrics. These are the three honest ways in. See <code>docs/DATA_SOURCES.md</code>.</p>
+        <div class="actions">
+          <button id="do-seed">Load sample data</button>
+          <button id="do-refresh">Recompute scores</button>
+          <button id="do-purge" class="danger">Delete sample rows</button>
+        </div>
+        <label class="field">
+          <span>Import a CSV / JSON file (path on this machine)</span>
+          <div class="row"><input id="import-path" placeholder="/path/to/reels.csv"><button id="do-import">Import</button></div>
+        </label>
+        <label class="field">
+          <span>Collect via Apify (needs <code>APIFY_TOKEN</code> in the environment)</span>
+          <div class="row">
+            <select id="collect-kind"><option value="account">accounts</option><option value="hashtag">hashtags</option></select>
+            <input id="collect-targets" placeholder="handle1, handle2 — blank uses the watchlist">
+            <button id="do-collect">Collect</button>
+          </div>
+        </label>
+        <pre id="data-log" class="log"></pre>
+      </div>
+      <div class="card">
+        <h2>Watchlist</h2>
+        <p class="note">The accounts and hashtags you want tracked. Collection runs read from this.</p>
+        <label class="field">
+          <div class="row">
+            <select id="watch-kind"><option value="account">account</option><option value="hashtag">hashtag</option></select>
+            <input id="watch-value" placeholder="handle or tag, comma separated">
+            <button id="do-watch">Add</button>
+          </div>
+        </label>
+        <div id="watchlist"></div>
+      </div>
+      <div class="card wide">
+        <h2>How the score works</h2>
+        <div id="weights" class="weights"></div>
+        <p class="note">Each signal is converted to a percentile rank across the whole corpus before weighting, so no unit dominates. A recency factor then discounts old reels — the point is to learn what works now.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="drawer" class="drawer" hidden>
+  <button class="close" id="drawer-close">×</button>
+  <div id="drawer-body"></div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
